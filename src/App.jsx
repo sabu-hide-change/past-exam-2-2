@@ -1,734 +1,901 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  CheckCircle, 
-  XCircle, 
-  AlertCircle, 
-  Play, 
-  RotateCcw, 
-  BookOpen, 
-  CheckSquare, 
-  ArrowRight,
-  List,
-  Trophy
-} from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, Legend } from 'recharts';
+// npm install lucide-react recharts firebase
+import React, { useState, useEffect } from 'react';
+import { Check, X, Home, ChevronRight, ChevronLeft, RefreshCw, BookOpen, Clock, List, ArrowRight } from 'lucide-react';
+import { initializeApp } from 'firebase/app';
+import { getAuth, signInAnonymously } from 'firebase/auth';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 
-// --- データ定義 (全14問: 2-2 簿記の基礎知識) ---
+// ==========================================
+// Firebase Configuration & Initialization
+// ==========================================
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
 
-const problemData = [
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const APP_ID = "QuizApp_Boki_001";
+
+// ==========================================
+// Quiz Data
+// ==========================================
+const questions = [
   {
     id: 1,
-    category: "有価証券",
+    year: "令和2年 第3問",
+    title: "有価証券",
     question: "有価証券の期末評価に関する記述として、最も適切なものはどれか。なお、有価証券の時価は著しく下落していないものとする。",
-    options: [
+    choices: [
       "子会社株式および関連会社株式は、取得原価をもって貸借対照表価額とする。",
       "その他有価証券は、時価をもって貸借対照表価額とし、評価差額は当期の損益として処理する。",
       "売買目的有価証券は、時価をもって貸借対照表価額とし、評価差額は貸借対照表の純資産の部に直接計上する。",
       "満期保有目的の債券を額面金額と異なる価額で取得した場合、取得価額と債券の額面金額との差額の性格が金利の調整と認められるときは、額面金額をもって貸借対照表価額とする。"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <p class="mb-2">有価証券は保有目的によって評価方法が異なります。</p>
-      
-      <div class="my-4 overflow-x-auto border rounded-lg">
-        <table class="min-w-full text-sm text-left">
-          <thead class="bg-blue-50">
-            <tr>
-              <th class="p-2 border">区分</th>
-              <th class="p-2 border">評価基準</th>
-              <th class="p-2 border">評価差額の処理</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td class="p-2 border font-bold">売買目的有価証券</td>
-              <td class="p-2 border">時価</td>
-              <td class="p-2 border">当期の損益 (P/L)</td>
-            </tr>
-            <tr>
-              <td class="p-2 border font-bold">満期保有目的の債券</td>
-              <td class="p-2 border">取得原価 (償却原価)</td>
-              <td class="p-2 border">-</td>
-            </tr>
-            <tr>
-              <td class="p-2 border font-bold text-red-600">子会社・関連会社株式</td>
-              <td class="p-2 border text-red-600">取得原価</td>
-              <td class="p-2 border">-</td>
-            </tr>
-            <tr>
-              <td class="p-2 border font-bold">その他有価証券</td>
-              <td class="p-2 border">時価</td>
-              <td class="p-2 border">純資産直入 (B/S)</td>
-            </tr>
-          </tbody>
-        </table>
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p>本問では、有価証券の期末処理について問われています。有価証券に関する細かい知識を問われているためやや難しい問題です。本問を通して理解を深めていきましょう。</p>
+        <p>有価証券は、その保有目的により次のように分類されます。</p>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse border border-gray-300 text-left">
+            <tbody>
+              <tr className="border-b border-gray-300">
+                <th className="p-2 border-r border-gray-300 bg-gray-100 whitespace-nowrap">売買目的有価証券</th>
+                <td className="p-2">時価の変動により利益を得ることを目的としているため、期末で時価評価し、評価差額は当期の損益として損益計算書に計上する。</td>
+              </tr>
+              <tr className="border-b border-gray-300">
+                <th className="p-2 border-r border-gray-300 bg-gray-100 whitespace-nowrap">満期保有目的の債券</th>
+                <td className="p-2">満期まで保有することを目的としていると認められる社債その他の債券であるため、期末で時価評価しない。</td>
+              </tr>
+              <tr className="border-b border-gray-300">
+                <th className="p-2 border-r border-gray-300 bg-gray-100 whitespace-nowrap">子会社および関連会社株式</th>
+                <td className="p-2">当該企業への影響力の行使を目的として保有する株式であり、時価の変動は投資の成果とはいえないため、期末で時価評価しない。</td>
+              </tr>
+              <tr>
+                <th className="p-2 border-r border-gray-300 bg-gray-100 whitespace-nowrap">その他有価証券</th>
+                <td className="p-2">長期的には売却が想定されるが、直ちに売却するとはいえないため、期末で時価評価するが、評価差額は損益とせず純資産に計上する。</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p><strong>選択肢アは適切です。</strong>「子会社株式および関連会社株式」は、当該企業への影響力の行使を目的として保有する株式のことです。時価の変動により利益を得ることを目的としていないため、「取得原価」で「貸借対照表」に表示します。</p>
+        <p><strong>選択肢イは不適切です。</strong>「その他有価証券」は期末で時価評価しますが、評価差額は損益とせず純資産に計上します。</p>
+        <p><strong>選択肢ウは不適切です。</strong>「売買目的有価証券」の評価差額は当期の損益として損益計算書に計上します。</p>
+        <p><strong>選択肢エは不適切です。</strong>「満期保有目的の債券」で取得価額と債券金額との差額の性格が金利の調整と認められるときには「償却原価法」に基づいて算定された価額をもって貸借対照表価額とします。</p>
       </div>
-
-      <p class="mb-2 text-red-600"><strong>ア ○：</strong> 子会社・関連会社株式は、事業支配等を目的とするため時価評価せず、取得原価で評価します。</p>
-      <p class="mb-2"><strong>イ ×：</strong> その他有価証券の評価差額は「純資産」に計上します（全部純資産直入法）。</p>
-      <p class="mb-2"><strong>ウ ×：</strong> 売買目的有価証券の評価差額は「当期の損益」として処理します。</p>
-      <p class="mb-2"><strong>エ ×：</strong> 金利調整と認められる場合は「償却原価法」を適用します。額面金額ではありません。</p>
-    `
+    )
   },
   {
     id: 2,
-    category: "経過勘定",
+    year: "平成29年 第2問",
+    title: "経過勘定",
     question: "20X2年1月1日に300,000千円を期間6カ月、年利5％で取引先Ｚ社に貸し付けた。20X2年6月30日に利息と元金を合わせて受け取る予定である。会計期間は20X2年3月31日までの1年間である。決算にあたり計上される未収利息の金額として、最も適切なものはどれか。",
-    options: [
+    choices: [
       "3,750千円",
       "7,500千円",
       "15,000千円",
       "30,000千円"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <p class="mb-2">当期（1月1日〜3月31日）に属する3ヶ月分の利息を月割り計算し、未収計上します。</p>
-      <div class="bg-gray-100 p-3 rounded mb-2">
-        <p><strong>計算式：</strong></p>
-        <p>元本 300,000千円 × 年利 5% × (3ヶ月 / 12ヶ月)</p>
-        <p>= 15,000 × 0.25</p>
-        <p class="text-xl font-bold text-blue-600 mt-2">= 3,750千円</p>
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p>経過勘定に関する問題です。未収収益とは、「一定の契約に従い、継続して役務の提供を行う場合、すでに提供した役務に対して、いまだその対価の支払を受けていないもの」のことをいいます。</p>
+        <ul className="list-disc ml-5">
+          <li>1月1日に300,000千円を期間6ヵ月、年利5％で貸付</li>
+          <li>6月30日に利息と元金を受け取る予定</li>
+          <li>会計期間は3月31日まで</li>
+        </ul>
+        <div className="border border-gray-400 p-4 relative my-4 flex flex-col items-center overflow-x-auto text-xs">
+           <div className="flex w-full justify-between mb-2">
+             <div className="text-center w-1/3">1月1日</div>
+             <div className="text-center w-1/3 font-bold">決算日<br/>3月31日</div>
+             <div className="text-center w-1/3 font-bold">受取<br/>6月30日</div>
+           </div>
+           <div className="w-full h-px bg-black mb-4"></div>
+           <div className="w-full flex">
+             <div className="w-1/2 bg-orange-100 border border-black p-2 text-center">未収利息（3,750千円）</div>
+             <div className="w-1/2"></div>
+           </div>
+           <div className="w-full flex mt-1">
+             <div className="w-full bg-orange-100 border border-black p-2 text-center">受取予定の金額（7,500千円）</div>
+           </div>
+        </div>
+        <p>1月1日に貸し付けを行って、契約によって6月30日に受取となるが、1月1日から3月31日までの3ヵ月間は当期に属する未収利息となる。</p>
+        <p>未収利息 ＝ 300,000千円 × 5％ × 3 ÷ 12 ＝ 3,750千円</p>
       </div>
-      <p class="text-sm text-gray-600">※全期間（6ヶ月）の利息は7,500千円ですが、そのうち当期分は半分です。</p>
-    `
+    )
   },
   {
     id: 3,
-    category: "売上原価の算定",
-    question: "以下の資料に基づいて、今期の売上原価として最も適切なものを下記の解答群から選べ。\n\n【資　料】\n期首商品棚卸高：120,000 円\n当期商品純仕入高：650,000 円\n期末帳簿棚卸数量：1,300 個（原価＠100円）\n期末実地棚卸数量：1,000 個\n※棚卸減耗損は売上原価とする。",
-    options: [
+    year: "平成27年 第1問",
+    title: "売上原価の算定",
+    question: "以下の資料に基づいて、今期の売上原価として最も適切なものを下記の解答群から選べ。\n【資 料】\n期首商品棚卸高：120,000 円\n当期商品純仕入高：650,000 円\n期末帳簿棚卸数量：1,300 個（原価＠100円）\n期末実地棚卸数量：1,000 個\n棚卸減耗損は売上原価とする。",
+    choices: [
       "610,000 円",
       "640,000 円",
       "670,000 円",
       "700,000 円"
     ],
-    correctAnswer: 2,
-    explanation: `
-      <p class="font-bold mb-2">正解：ウ</p>
-      <div class="space-y-2">
-        <div class="border p-2 rounded bg-white">
-          <p class="font-bold border-b mb-1">① 期末商品棚卸高（帳簿）</p>
-          <p>1,300個 × 100円 = 130,000円</p>
+    answerIndex: 2,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ウ</p>
+        <p>売上原価は、「期首商品棚卸高 ＋ 当期商品仕入高 － 期末商品棚卸高」で算出されます。</p>
+        <p>期末商品棚卸高（帳簿） ＝ 1,300個 × ＠100円 ＝ 130,000円</p>
+        <p>売上原価（減耗前） ＝ 120,000円 ＋ 650,000円 － 130,000円 ＝ 640,000円</p>
+        <div className="flex border border-black w-64 text-center my-4 text-xs">
+          <div className="w-1/2 border-r border-black">
+            <div className="border-b border-black p-2">期首商品<br/>120,000</div>
+            <div className="p-2">当期商品仕入<br/>650,000</div>
+          </div>
+          <div className="w-1/2 flex flex-col">
+            <div className="flex-1 bg-orange-100 border-b border-black p-2 flex items-center justify-center">売上原価<br/>640,000</div>
+            <div className="p-2 h-16">期末商品<br/>130,000</div>
+          </div>
         </div>
-        <div class="border p-2 rounded bg-white">
-          <p class="font-bold border-b mb-1">② 棚卸減耗損</p>
-          <p>(帳簿1,300 - 実地1,000) × 100円 = 300個 × 100円 = 30,000円</p>
-          <p class="text-xs text-red-500">※問題文より「売上原価に含める」</p>
+        <p>本問では、「棚卸減耗損は売上原価とする」という指示があります。</p>
+        <p>棚卸減耗損 ＝（1,300個－1,000個）× ＠100円 ＝ 30,000円</p>
+        <div className="flex border border-black w-64 text-center my-4 text-xs">
+          <div className="w-1/2 border-r border-black p-2">B/S商品<br/>100,000<br/>(1,000個)</div>
+          <div className="w-1/2 bg-orange-100 p-2">棚卸減耗損<br/>30,000<br/>(300個)</div>
         </div>
-        <div class="border p-2 rounded bg-blue-50">
-          <p class="font-bold border-b mb-1">③ 売上原価の計算</p>
-          <p>期首(120,000) + 当期仕入(650,000) - 期末帳簿(130,000) + 減耗損(30,000)</p>
-          <p class="text-right font-bold text-lg text-blue-700">= 670,000円</p>
-        </div>
-        <p class="text-sm text-gray-500 mt-1">別解：期首 + 仕入 - 実地棚卸(100,000) = 670,000円 と計算しても同じです。</p>
+        <p>したがって、先に計算した640,000円にこの30,000円を加算した金額670,000円が最終的な売上原価になります。</p>
       </div>
-    `
+    )
   },
   {
     id: 4,
-    category: "準備金積立",
-    question: "株主総会の決議により、その他資本剰余金を取り崩して600,000円配当することにした。なお、資本金は4,000,000円、準備金の合計は950,000円である。このとき積み立てるべき準備金の種類と金額の組み合わせとして、最も適切なものはどれか。",
-    options: [
-      "種類：資本準備金　金額：50,000 円",
-      "種類：資本準備金　金額：60,000 円",
-      "種類：利益準備金　金額：50,000 円",
-      "種類：利益準備金　金額：60,000 円"
+    year: "平成27年 第4問",
+    title: "準備金積立",
+    question: "株主総会の決議により、その他資本剰余金を取り崩して600,000円配当することにした。なお、資本金は4,000,000円、準備金の合計は950,000円である。このとき積み立てるべき準備金の種類と金額の組み合わせとして、最も適切なものを選べ。\n【準備金の種類】ａ 資本準備金、ｂ 利益準備金\n【金額】ｃ 50,000 円、ｄ 60,000 円",
+    choices: [
+      "ａとｃ",
+      "ａとｄ",
+      "ｂとｃ",
+      "ｂとｄ"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <ul class="list-disc pl-5 space-y-1 mb-2">
-        <li><strong>準備金の種類：</strong> 原資が「その他資本剰余金」なので、積み立てるのは<strong>「資本準備金」</strong>です。</li>
-        <li><strong>原則額：</strong> 配当額(60万) × 1/10 = 60,000円</li>
-        <li><strong>限度額（1/4規定）：</strong> (資本金(400万) × 1/4) - 準備金合計(95万) = 100万 - 95万 = <strong>50,000円</strong></li>
-      </ul>
-      <p class="mb-2">原則額(6万)と限度額(5万)の<strong>小さい方</strong>を積み立てます。</p>
-      <p class="font-bold text-blue-600">答え：資本準備金、50,000円</p>
-    `
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p>その他資本剰余金を取り崩して配当したため、積み立てるべき準備金の種類は「資本準備金」（ａ）になります。</p>
+        <p>配当する剰余金の10分の1の額（60,000円）を準備金として積み立てる必要がありますが、「4分の1規定」により、資本準備金と利益準備金の合計が資本金の4分の1に達するまで積み立てればよいとされています。</p>
+        <p>資本金4,000,000円の4分の1は1,000,000円です。現在の準備金の合計は950,000円なので、不足額は50,000円です。</p>
+        <p>したがって、配当額の10分の1（60,000円）と、不足額（50,000円）のうち、少ない方である50,000円（ｃ）を積み立てます。</p>
+        <p>よって、ａとｃの組み合わせが正解です。</p>
+      </div>
+    )
   },
   {
     id: 5,
-    category: "固定資産除却",
-    question: "備品(取得日:2018年4月1日、取得原価:800,000円、償却方法:定率法(償却率年25%)、記帳方法:間接法、決算日:3月31日)が不要となり、2020年3月31日に除却した。\nなお、除却した備品の評価額は250,000円である。\n固定資産除却損として、最も適切なものはどれか。",
-    options: [
+    year: "令和3年 第3問",
+    title: "固定資産除却",
+    question: "備品(取得日:2018年4月1日、取得原価:800,000円、償却方法:定率法(償却率年25%)、記帳方法:間接法、決算日:3月31日)が不要となり、2020年3月31日に除却した。なお、除却した備品の評価額は250,000円である。固定資産除却損として、最も適切なものはどれか。",
+    choices: [
       "100,000円",
       "150,000円",
       "200,000円",
       "250,000円"
     ],
-    correctAnswer: 2,
-    explanation: `
-      <p class="font-bold mb-2">正解：ウ</p>
-      <p class="mb-2">2年経過後の簿価を計算し、評価額との差額を求めます。</p>
-      <div class="space-y-2 text-sm">
-        <div class="bg-white p-2 border rounded">
-          <p><strong>1年目 (2018/4 - 2019/3):</strong></p>
-          <p>800,000 × 25% = 200,000 (減価償却費)</p>
-          <p>簿価: 600,000</p>
-        </div>
-        <div class="bg-white p-2 border rounded">
-          <p><strong>2年目 (2019/4 - 2020/3):</strong></p>
-          <p>600,000 × 25% = 150,000 (減価償却費)</p>
-          <p>簿価: 450,000</p>
-        </div>
-        <div class="bg-blue-50 p-2 border rounded">
-          <p><strong>除却損益:</strong></p>
-          <p>評価額(250,000) - 簿価(450,000) = <strong>△200,000 (損)</strong></p>
-        </div>
+    answerIndex: 2,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ウ</p>
+        <p>定率法の減価償却費 ＝ (取得原価 － 減価償却累計額) × 償却率</p>
+        <ul className="list-disc ml-5">
+          <li>1年目の減価償却費 ＝ 800,000 × 25% ＝ 200,000円</li>
+          <li>2年目の減価償却費 ＝ (800,000 － 200,000) × 25% ＝ 150,000円</li>
+        </ul>
+        <p>除却時点の簿価 ＝ 800,000 － (200,000 ＋ 150,000) ＝ 450,000円</p>
+        <p>固定資産除却損 ＝ 簿価 450,000 － 評価額 250,000 ＝ 200,000円</p>
       </div>
-    `
+    )
   },
   {
     id: 6,
-    category: "無形固定資産の会計",
+    year: "令和2年 第8問",
+    title: "無形固定資産の会計",
     question: "無形固定資産の会計に関する記述として、最も適切なものはどれか。",
-    options: [
+    choices: [
       "自社が長年にわたり築き上げたブランドにより、同業他社に比べ高い収益性を獲得している場合には、これを無形固定資産に計上することができる。",
       "自社の研究開発活動により特許権を取得した場合には、それまでの年度に支出された研究開発費を戻し入れ、無形固定資産として計上しなければならない。",
       "受注制作のソフトウェアの制作費は、請負工事の会計処理に準じて処理され、無形固定資産に計上されない。",
       "のれんとして資産計上された金額は、最長10年にわたり、規則的に償却される。"
     ],
-    correctAnswer: 2,
-    explanation: `
-      <p class="font-bold mb-2">正解：ウ</p>
-      <p class="mb-2"><strong>ア ×：</strong> 自社創設の「のれん（ブランド価値）」は資産計上できません。有償取得したものに限ります。</p>
-      <p class="mb-2"><strong>イ ×：</strong> 研究開発費は発生時に費用処理します。あとから資産に戻し入れることはしません。</p>
-      <p class="mb-2 text-red-600"><strong>ウ ○：</strong> 受注制作ソフトは、販売先への「請負工事」のようなものなので、制作費は資産ではなく売上原価（または仕掛品）として扱われます。</p>
-      <p class="mb-2"><strong>エ ×：</strong> のれんの償却期間は最長<strong>20年</strong>です。</p>
-    `
+    answerIndex: 2,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ウ</p>
+        <p><strong>アは不適切：</strong>自社が獲得している収益性のあるブランド等を自己創設のれんとして無形固定資産に計上することは認められていません。</p>
+        <p><strong>イは不適切：</strong>研究開発費は発生した期の費用（一般管理費等）として計上し、後から特許権を取得したとしても、過去の費用を戻し入れて資産計上することはしません。</p>
+        <p><strong>ウは適切：</strong>受注制作のソフトウェアの制作費用は、請負工事の会計処理に準じて処理（工事進行基準など）され、無形固定資産（自社利用や市場販売目的など）には計上されません。</p>
+        <p><strong>エは不適切：</strong>のれんの償却は最長20年です。</p>
+      </div>
+    )
   },
   {
     id: 7,
-    category: "3伝票制",
-    question: "商品120,000円を売り上げ、代金のうち30,000円を現金で受け取り、残額を掛けとした。この取引を入金伝票と振替伝票で処理する場合、振替伝票の仕訳として適切なものはどれか。\n(入金伝票には「[借]現金 30,000 / [貸]売掛金 30,000」と起票されているものとする)",
-    options: [
-      "[借] 売掛金 90,000 / [貸] 売上 90,000",
-      "[借] 売掛金 120,000 / [貸] 売上 120,000",
-      "[借] 現金 30,000 / [貸] 売上 120,000 (貸方に売掛金90,000)",
-      "[借] 現金 90,000 / [貸] 売上 120,000 (貸方に売掛金30,000)"
+    year: "平成30年 第1問",
+    title: "3伝票制",
+    question: "商品120,000円を売り上げ、代金のうち30,000円を現金で受け取り、残額を掛けとした。入金伝票に「売掛金 30,000」と起票した場合、振替伝票はどのように記入すべきか。なお、3伝票制が用いられている。",
+    choices: [
+      "売掛金 90,000 / 売上 90,000",
+      "売掛金 120,000 / 売上 120,000",
+      "現金 30,000, 売掛金 90,000 / 売上 120,000",
+      "現金 90,000, 売掛金 30,000 / 売上 120,000"
     ],
-    correctAnswer: 1,
-    explanation: `
-      <p class="font-bold mb-2">正解：イ</p>
-      <p class="mb-2">一部現金取引における「総額法（一度全額を掛けにする方法）」の処理です。</p>
-      <div class="border p-2 rounded mb-2 text-sm">
-        <p class="font-bold text-gray-700">① 振替伝票（全額掛けにする）</p>
-        <p class="pl-4 text-blue-600"><strong>(借) 売掛金 120,000 / (貸) 売上 120,000</strong></p>
-        <p class="font-bold text-gray-700 mt-2">② 入金伝票（現金分を消し込む）</p>
-        <p class="pl-4">(借) 現金 30,000 / (貸) 売掛金 30,000</p>
+    answerIndex: 1,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：イ</p>
+        <p>取引の全体の仕訳は以下のようになります。<br/>(借) 現金 30,000, 売掛金 90,000 / (貸) 売上 120,000</p>
+        <p>入金伝票に「(貸方) 売掛金 30,000」と記載されているということは、裏で「(借方) 現金 30,000 / (貸方) 売掛金 30,000」という仕訳が切られている（擬制取引）ことを意味します。</p>
+        <p>これは、いったん全額を売掛金として売上を計上し、その後一部を現金で回収したとみなす方法です。</p>
+        <p>したがって、振替伝票では全額を掛け売りした仕訳を切る必要があります。<br/>(借) 売掛金 120,000 / (貸) 売上 120,000</p>
       </div>
-      <p class="text-sm">これらを合わせると、「現金3万、売掛金9万 / 売上12万」という正しい仕訳になります。</p>
-    `
+    )
   },
   {
     id: 8,
-    category: "ソフトウェア会計",
+    year: "平成30年 第5問",
+    title: "ソフトウェア会計",
     question: "ソフトウェアの会計処理および開示に関する記述として、最も適切なものはどれか。",
-    options: [
+    choices: [
       "自社利用目的のソフトウェアのうち、将来の収益獲得または費用削減が確実であるものについては、機械装置等に組み込まれたものを除き、その取得に要した費用を無形固定資産として計上する。",
       "市場販売を目的とするソフトウェアの製品マスターが完成するまでに要した制作費は、最初に製品化されたときに無形固定資産として計上する。",
       "受注制作のソフトウェアは、その制作に要した費用を無形固定資産として計上する。",
       "無形固定資産として計上したソフトウェアは規則的な償却を行わず、価値の低下時に減損処理する。"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <p class="mb-2 text-red-600"><strong>ア ○：</strong> 自社利用ソフトで、収益獲得等の確実性があるものは資産計上します。</p>
-      <p class="mb-2"><strong>イ ×：</strong> 製品マスター完成までの費用は「研究開発費」として費用処理します。</p>
-      <p class="mb-2"><strong>ウ ×：</strong> 受注制作ソフトは請負工事に準じるため、無形固定資産にはなりません。</p>
-      <p class="mb-2"><strong>エ ×：</strong> ソフトウェアは利用可能期間（通常5年以内）で定額法などで規則的に償却します。</p>
-    `
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p><strong>アは適切：</strong>自社利用ソフトウェアで、将来の収益獲得や費用削減が確実なものは、無形固定資産として計上します。</p>
+        <p><strong>イは不適切：</strong>市場販売目的のソフトウェアは、製品マスター完成までにかかった費用は「研究開発費」として費用処理されます。完成後の著しくない機能改良などが無形固定資産となります。</p>
+        <p><strong>ウは不適切：</strong>受注制作ソフトウェアの制作費は、仕掛品などを経て売上原価として処理され、無形固定資産にはなりません。</p>
+        <p><strong>エは不適切：</strong>無形固定資産として計上されたソフトウェアは、一般的に利用可能期間（原則5年以内）にわたり規則的に償却されます。</p>
+      </div>
+    )
   },
   {
     id: 9,
-    category: "損益計算",
-    question: "決算（12月31日）にあたり、以下の取引に対し計上される収益・費用の金額はどれか。\n・4月20日：全10回のセミナー受講料500,000円を現金で受取。\n・5月30日：全10回分のテキスト作成費250,000円を現金で支出。\n・12月31日：全10回のうち6回が終了している。",
-    options: [
+    year: "平成30年 第7問",
+    title: "損益計算における費用と収益の認識基準",
+    question: "4月20日：7月開講予定のセミナー（全10回、50,000円／回）の受講料総額500,000円を現金で受け取った。\n5月30日：全10回分のテキスト作成のため現金250,000円を支出した。\n12月31日（決算日）：全10回のうち6回が終了していた。\n計上される収益および費用の金額の組み合わせとして、最も適切なものを選べ。",
+    choices: [
       "収益：300,000円　費用：150,000円",
       "収益：300,000円　費用：250,000円",
       "収益：500,000円　費用：150,000円",
       "収益：500,000円　費用：250,000円"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <p class="mb-2">発生主義・実現主義に基づき、<strong>実施した回数分（6回分）</strong>だけを計上します。</p>
-      <div class="grid grid-cols-2 gap-4 text-center text-sm mb-2">
-        <div class="border p-2 rounded bg-blue-50">
-          <p class="font-bold">収益</p>
-          <p>500,000 × (6/10)</p>
-          <p class="font-bold text-lg text-blue-700">= 300,000</p>
-        </div>
-        <div class="border p-2 rounded bg-red-50">
-          <p class="font-bold">費用</p>
-          <p>250,000 × (6/10)</p>
-          <p class="font-bold text-lg text-red-700">= 150,000</p>
-        </div>
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p>収益は「実現主義」、費用は「発生主義」および「費用収益対応の原則」に基づいて認識されます。</p>
+        <p><strong>収益：</strong>決算日においてセミナーは6回分終了しているため、実現した収益は 50,000円 × 6回 ＝ 300,000円 となります。</p>
+        <p><strong>費用：</strong>全10回分のテキスト作成費250,000円を支出していますが、費用収益対応の原則に基づき、当期に実現した収益（6回分）に対応する部分だけを計上します。<br/>250,000円 × (6回 / 10回) ＝ 150,000円</p>
       </div>
-      <p class="text-xs text-gray-500">残りの未実施分は、前受金・前払費用（または仮払金）として次期に繰り越します。</p>
-    `
+    )
   },
   {
     id: 10,
-    category: "剰余金の配当",
+    year: "令和5年 第7問",
+    title: "剰余金の配当",
     question: "剰余金の配当と処分に関する記述として、最も適切なものはどれか。",
-    options: [
+    choices: [
       "株式会社は、1事業年度につき、中間配当と期末配当の最大2回の配当を行うことができる。",
       "株式会社は、資本剰余金を原資とする配当を行うことはできない。",
       "取締役会設置会社は、取締役会の決議によって中間配当を実施することができる旨を定款で定めることができる。",
       "役員賞与を支払う場合、その10分の1の額を利益準備金として積み立てなければならない。"
     ],
-    correctAnswer: 2,
-    explanation: `
-      <p class="font-bold mb-2">正解：ウ</p>
-      <p class="mb-2"><strong>ア ×：</strong> 会社法では配当回数の制限はありません（臨時決算をすれば何度でも可能）。</p>
-      <p class="mb-2"><strong>イ ×：</strong> 資本剰余金を原資とする配当も可能です。</p>
-      <p class="mb-2 text-red-600"><strong>ウ ○：</strong> 取締役会設置会社は、定款の定めがあれば取締役会決議で中間配当ができます。</p>
-      <p class="mb-2"><strong>エ ×：</strong> 役員賞与は費用の発生であり、準備金の積立規定（配当に伴う積立）の対象外です。</p>
-    `
+    answerIndex: 2,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ウ</p>
+        <p><strong>アは不適切：</strong>会社法上、剰余金の配当は株主総会の決議等により何度でも行うことができます（回数制限なし）。</p>
+        <p><strong>イは不適切：</strong>その他資本剰余金を原資とする配当も可能です。</p>
+        <p><strong>ウは適切：</strong>取締役会設置会社は、1事業年度に1回に限り、取締役会の決議により中間配当を行うことができる旨を定款で定めることができます。</p>
+        <p><strong>エは不適切：</strong>剰余金の配当を行う場合には準備金の積立が必要ですが、役員賞与（費用処理される）の支払いに対して準備金を積み立てる規定はありません。</p>
+      </div>
+    )
   },
   {
     id: 11,
-    category: "収益認識基準",
-    question: "8/12に商品B(25,000円)と商品C(35,000円)の販売契約を結び、商品Bのみ先に引き渡した。代金合計60,000円は両方引き渡し後に請求できる契約である。8/12の仕訳として適切なものはどれか。",
-    options: [
-      "(借)契約資産 25,000 / (貸)売上 25,000",
-      "(借)契約資産 25,000 / (貸)契約負債 25,000",
-      "(借)契約資産 60,000 / (貸)売上 60,000",
-      "(借)契約資産 60,000 / (貸)売上 25,000 (貸方に契約負債35,000)"
+    year: "令和5年 第2問",
+    title: "収益認識基準",
+    question: "8/12: 商品B(25,000円)と商品C(35,000円)を販売する契約を締結。代金60,000円は両方を引き渡した後に請求。商品BとCの引き渡しは独立した履行義務。商品Bは直ちに引き渡した。\n8/25: 商品Cを引き渡した。請求書を送付予定。\nこの取引の仕訳として適切なものはどれか。",
+    choices: [
+      "8/12 (借)契約資産 25,000 (貸)売上 25,000\n8/25 (借)売掛金 60,000 (貸)契約資産 25,000, 売上 35,000",
+      "8/12 (借)契約資産 25,000 (貸)契約負債 25,000\n8/25 (借)売掛金 60,000 (貸)売上 60,000, 契約負債 25,000 (借)契約資産 25,000",
+      "8/12 (借)契約資産 60,000 (貸)売上 60,000\n8/25 (借)売掛金 60,000 (貸)契約資産 60,000",
+      "8/12 (借)契約資産 60,000 (貸)売上 25,000, 契約負債 35,000\n8/25 は仕訳なし"
     ],
-    correctAnswer: 0,
-    explanation: `
-      <p class="font-bold mb-2">正解：ア</p>
-      <p class="mb-2">商品Bを引き渡した時点で、Bの収益（売上）を認識します。</p>
-      <p class="mb-2">ただし、代金請求権はまだ発生していない（Cを渡すまで請求できない）ため、「売掛金」ではなく<strong>「契約資産」</strong>を使います。</p>
-      <div class="bg-gray-100 p-2 rounded text-center">
-        <p class="font-mono font-bold">(借) 契約資産 25,000 / (貸) 売上 25,000</p>
+    answerIndex: 0,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ア</p>
+        <p>新収益認識基準では、履行義務を充足した時点（商品を引き渡した時点）で収益を認識します。</p>
+        <p><strong>8月12日の処理：</strong>商品Bのみを引き渡したため、商品Bの収益25,000円を認識します。しかし、代金の請求権は商品Cの引き渡し後に発生するという条件があるため、無条件の請求権である「売掛金」ではなく「契約資産」として計上します。<br/>(借)契約資産 25,000 / (貸)売上 25,000</p>
+        <p><strong>8月25日の処理：</strong>商品Cを引き渡したことで、商品Cの収益35,000円を認識します。同時に、すべての履行義務が満たされ、全体の代金60,000円に対する無条件の請求権が発生したため、契約資産を売掛金に振り替えます。<br/>(借)売掛金 60,000 / (貸)契約資産 25,000, 売上 35,000</p>
       </div>
-    `
+    )
   },
   {
     id: 12,
-    category: "特殊商品販売",
+    year: "令和4年 第3問",
+    title: "収益認識基準（特殊商品販売）",
     question: "収益認識のタイミングとして、最も適切なものはどれか。",
-    options: [
+    choices: [
       "委託販売において、商品を代理店に発送した時点",
       "割賦販売において、商品を引き渡した時点",
       "試用販売において、試用のために商品を発送した時点",
       "予約販売において、商品の販売前に予約を受けた時点"
     ],
-    correctAnswer: 1,
-    explanation: `
-      <p class="font-bold mb-2">正解：イ</p>
-      <p class="mb-2"><strong>ア ×：</strong> 委託販売は、受託者が商品を「販売した日」に収益認識します（積送時はNG）。</p>
-      <p class="mb-2 text-red-600"><strong>イ ○：</strong> 割賦販売は、原則として商品引渡時に全額収益認識します（回収期限到来基準などは廃止）。</p>
-      <p class="mb-2"><strong>ウ ×：</strong> 試用販売は、相手が「買取の意思表示」をした時点で収益認識します。</p>
-      <p class="mb-2"><strong>エ ×：</strong> 予約販売は、商品を引き渡した時点で収益認識します（予約時は前受金）。</p>
-    `
+    answerIndex: 1,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：イ</p>
+        <p><strong>アは不適切：</strong>委託販売は、受託者（代理店）が商品を第三者に販売した時点で収益を認識します。</p>
+        <p><strong>イは適切：</strong>割賦販売においても、新収益認識基準の下では原則として商品の引き渡し時点で収益を認識します（回収基準や割賦基準は廃止されました）。</p>
+        <p><strong>ウは不適切：</strong>試用販売は、顧客が商品の買い取りの意思表示（買上意思表示）を行った時点で収益を認識します。</p>
+        <p><strong>エは不適切：</strong>予約販売は、予約を受けた時点ではなく、実際に商品を顧客に引き渡した時点で収益を認識します。</p>
+      </div>
+    )
   },
   {
     id: 13,
-    category: "収益認識の記述",
+    year: "令和3年 第6問",
+    title: "収益認識基準",
     question: "収益に関する記述として、最も適切なものはどれか。",
-    options: [
+    choices: [
       "検収基準は、契約の解消や返品リスクがない場合に採用される。",
       "出荷基準よりも収益認識のタイミングが早いのは、引渡基準である。",
       "長期請負工事については、工事進行基準を適用しなければならない。",
       "販売基準は実現主義に基づいている。"
     ],
-    correctAnswer: 3,
-    explanation: `
-      <p class="font-bold mb-2">正解：エ</p>
-      <p class="mb-2"><strong>ア ×：</strong> 検収基準は、返品リスク等がある場合に、検収完了まで収益計上を待つ保守的な基準です。</p>
-      <p class="mb-2"><strong>イ ×：</strong> 出荷 → 引渡(着荷) なので、引渡基準の方が遅いです。</p>
-      <p class="mb-2"><strong>ウ ×：</strong> 成果の確実性が認められない場合は「工事完成基準（回収基準等）」となります。</p>
-      <p class="mb-2 text-red-600"><strong>エ ○：</strong> 収益会計の基本原則です。費用＝発生主義、収益＝実現主義。</p>
-    `
+    answerIndex: 3,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：エ</p>
+        <p><strong>アは不適切：</strong>検収基準は、取引先が検収（確認）をした時点で収益を認識します。リスクの有無だけで採用されるわけではありません。</p>
+        <p><strong>イは不適切：</strong>引渡基準は商品が到着した時点なので、発送した時点である出荷基準よりも認識タイミングは遅くなります。</p>
+        <p><strong>ウは不適切：</strong>長期請負工事において、進捗部分について成果の確実性が認められない場合には、工事進行基準ではなく工事完成基準などが適用されます（必ずしも進行基準とは限らない）。</p>
+        <p><strong>エは適切：</strong>商品販売等による収益の認識（販売基準）は、実現主義（財貨の引渡しと対価の受領）に基づいています。</p>
+      </div>
+    )
   },
   {
     id: 14,
-    category: "減価償却費",
-    question: "X1年4月1日取得、耐用年数10年、残存ゼロの定額法の機械がある。X5年4月1日(当期首)の簿価は216,000円だった。この機械の取得原価はいくらか。",
-    options: [
+    year: "令和4年 第11問",
+    title: "減価償却費",
+    question: "当期はX5年4月1日からX6年3月31日の1年間である。決算整理前の機械勘定の残高は216,000円であるが、当期より直接控除法から間接控除法に記帳方法を変更する。この機械はX1年4月1日に取得したものであり、耐用年数10年、残存価額をゼロとする定額法により減価償却を行っている。この機械の取得原価として、最も適切なものはどれか。",
+    choices: [
       "216,000円",
       "237,600円",
       "360,000円",
       "432,000円"
     ],
-    correctAnswer: 2,
-    explanation: `
-      <p class="font-bold mb-2">正解：ウ</p>
-      <p class="mb-2">X1年4月からX5年4月まで、丸4年経過しています。</p>
-      <div class="bg-blue-50 p-3 rounded text-sm">
-        <p>耐用年数10年のうち4年経過 <br/>→ <strong>残り6年分</strong>の価値が216,000円です。</p>
-        <p class="mt-2 border-t border-gray-300 pt-2">
-          1年あたりの償却費 = 216,000 ÷ 6 = 36,000円
-        </p>
-        <p>取得原価 (10年分) = 36,000 × 10 = <strong>360,000円</strong></p>
+    answerIndex: 2,
+    explanation: (
+      <div className="space-y-4 text-sm text-gray-800">
+        <p>解答：ウ</p>
+        <p>直接控除法で記帳されているため、決算整理前（X5年3月31日時点）の機械勘定残高216,000円は、取得原価から過去の減価償却費累計額が直接差し引かれたあとの「未償却残高（簿価）」です。</p>
+        <p>X1年4月1日の取得からX5年3月31日まで、丸4年が経過しています。</p>
+        <p>定額法（耐用年数10年、残存価額ゼロ）の場合、毎年の償却費は取得原価の1/10（10%）です。</p>
+        <p>4年経過しているので、取得原価の4/10（40%）が償却済みであり、残高216,000円は取得原価の6/10（60%）に相当します。</p>
+        <p>取得原価 × 0.6 = 216,000円<br/>取得原価 = 216,000円 ÷ 0.6 = 360,000円</p>
       </div>
-    `
+    )
   }
 ];
 
-// --- コンポーネント実装 ---
-
+// ==========================================
+// Main App Component
+// ==========================================
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState('menu'); // 'menu', 'quiz', 'result'
-  const [quizMode, setQuizMode] = useState('all'); // 'all', 'wrong', 'review'
-  const [currentProblemIndex, setCurrentProblemIndex] = useState(0);
-  const [filteredProblems, setFilteredProblems] = useState([]);
-  const [userAnswers, setUserAnswers] = useState({}); // { problemId: { answerIndex, isCorrect, timestamp } }
-  const [reviewFlags, setReviewFlags] = useState({}); // { problemId: boolean }
-  const [showExplanation, setShowExplanation] = useState(false);
-  const [selectedOption, setSelectedOption] = useState(null);
+  const [step, setStep] = useState('login'); // login, resume_prompt, menu, quiz, result, history
+  const [userId, setUserId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  // User Data State
+  const [historyData, setHistoryData] = useState({});
+  const [reviewData, setReviewData] = useState({});
+  const [progressData, setProgressData] = useState({ index: 0, mode: null });
 
-  // 初期ロード (localStorageキーを 'app_financial_2_2_new' に設定)
+  // Quiz State
+  const [quizMode, setQuizMode] = useState('all'); // all, wrong, review
+  const [currentList, setCurrentList] = useState([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [isAnswered, setIsAnswered] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState(null);
+  const [sessionCorrectCount, setSessionCorrectCount] = useState(0);
+
   useEffect(() => {
-    const savedAnswers = JSON.parse(localStorage.getItem('app_financial_2_2_new_answers')) || {};
-    const savedReviews = JSON.parse(localStorage.getItem('app_financial_2_2_new_reviews')) || {};
-    setUserAnswers(savedAnswers);
-    setReviewFlags(savedReviews);
+    // Initial anonymous sign in
+    const signIn = async () => {
+      try {
+        await signInAnonymously(auth);
+        console.log("Firebase Auth initialized.");
+      } catch (e) {
+        console.error("Auth error:", e);
+      }
+    };
+    signIn();
   }, []);
 
-  // 保存
-  useEffect(() => {
-    localStorage.setItem('app_financial_2_2_new_answers', JSON.stringify(userAnswers));
-    localStorage.setItem('app_financial_2_2_new_reviews', JSON.stringify(reviewFlags));
-  }, [userAnswers, reviewFlags]);
+  // ----------------------------------------
+  // Data Fetching & Saving
+  // ----------------------------------------
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    if (!userId.trim()) {
+      setErrorMsg("合言葉（ユーザーID）を入力してください");
+      return;
+    }
+    setLoading(true);
+    setErrorMsg('');
+    try {
+      const docRef = doc(db, APP_ID, userId);
+      const docSnap = await getDoc(docRef);
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setHistoryData(data.history || {});
+        setReviewData(data.review || {});
+        
+        const pIndex = data.progressIndex || 0;
+        const pMode = data.progressMode || null;
+        setProgressData({ index: pIndex, mode: pMode });
 
-  // 問題セットアップ
-  const startQuiz = (mode) => {
-    let targets = [];
+        console.log("Data loaded:", data);
+
+        if (pIndex > 0 && pMode) {
+          setStep('resume_prompt');
+        } else {
+          setStep('menu');
+        }
+      } else {
+        console.log("No previous data found.");
+        setHistoryData({});
+        setReviewData({});
+        setProgressData({ index: 0, mode: null });
+        setStep('menu');
+      }
+    } catch (e) {
+      console.error("Fetch error:", e);
+      setErrorMsg("データの読み込みに失敗しました。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveData = async (newData) => {
+    try {
+      const docRef = doc(db, APP_ID, userId);
+      await setDoc(docRef, newData, { merge: true });
+      console.log("Data saved:", newData);
+    } catch (e) {
+      console.error("Save error:", e);
+    }
+  };
+
+  const toggleReview = async (qId) => {
+    const newVal = !reviewData[qId];
+    const newReviewData = { ...reviewData, [qId]: newVal };
+    setReviewData(newReviewData);
+    await saveData({ review: newReviewData });
+  };
+
+  // ----------------------------------------
+  // Quiz Flow Logic
+  // ----------------------------------------
+  const startQuiz = (mode, startIndex = 0) => {
+    let list = [];
     if (mode === 'all') {
-      targets = problemData;
+      list = [...questions];
     } else if (mode === 'wrong') {
-      targets = problemData.filter(p => {
-        const hist = userAnswers[p.id];
-        return hist && !hist.isCorrect;
-      });
+      list = questions.filter(q => historyData[q.id] === 'wrong' || !historyData[q.id]);
     } else if (mode === 'review') {
-      targets = problemData.filter(p => reviewFlags[p.id]);
+      list = questions.filter(q => reviewData[q.id]);
     }
 
-    if (targets.length === 0) {
-      alert("対象となる問題がありません。");
+    if (list.length === 0) {
+      alert("該当する問題がありません。");
       return;
     }
 
     setQuizMode(mode);
-    setFilteredProblems(targets);
-    setCurrentProblemIndex(0);
-    setShowExplanation(false);
-    setSelectedOption(null);
-    setCurrentScreen('quiz');
+    setCurrentList(list);
+    setCurrentIndex(startIndex);
+    setIsAnswered(false);
+    setSelectedChoice(null);
+    setSessionCorrectCount(0); // This count is for UI feedback in the current session
+    setStep('quiz');
   };
 
-  const handleAnswer = (optionIndex) => {
-    setSelectedOption(optionIndex);
-    const problem = filteredProblems[currentProblemIndex];
-    const isCorrect = optionIndex === problem.correctAnswer;
+  const resumeQuiz = () => {
+    startQuiz(progressData.mode, progressData.index);
+  };
+
+  const resetProgressAndStart = (mode) => {
+    saveData({ progressIndex: 0, progressMode: null });
+    setProgressData({ index: 0, mode: null });
+    startQuiz(mode, 0);
+  };
+
+  const handleChoiceClick = async (idx) => {
+    if (isAnswered) return;
     
-    // 記録更新
-    setUserAnswers(prev => ({
-      ...prev,
-      [problem.id]: {
-        answerIndex: optionIndex,
-        isCorrect: isCorrect,
-        timestamp: new Date().toISOString()
-      }
-    }));
-    
-    setShowExplanation(true);
-  };
+    setSelectedChoice(idx);
+    setIsAnswered(true);
 
-  const nextProblem = () => {
-    if (currentProblemIndex < filteredProblems.length - 1) {
-      setCurrentProblemIndex(prev => prev + 1);
-      setShowExplanation(false);
-      setSelectedOption(null);
-    } else {
-      setCurrentScreen('result');
-    }
-  };
+    const currentQ = currentList[currentIndex];
+    const isCorrect = idx === currentQ.answerIndex;
 
-  const toggleReview = (problemId) => {
-    setReviewFlags(prev => {
-      const newVal = !prev[problemId];
-      return { ...prev, [problemId]: newVal };
+    // Update session count
+    if (isCorrect) setSessionCorrectCount(prev => prev + 1);
+
+    // Update History
+    const newHistoryData = { ...historyData, [currentQ.id]: isCorrect ? 'correct' : 'wrong' };
+    setHistoryData(newHistoryData);
+
+    // Save history and current progress index
+    await saveData({ 
+      history: newHistoryData,
+      progressIndex: currentIndex,
+      progressMode: quizMode
     });
   };
 
-  // 集計
-  const stats = useMemo(() => {
-    const total = problemData.length;
-    const answeredCount = Object.keys(userAnswers).length;
-    const correctCount = Object.values(userAnswers).filter(a => a.isCorrect).length;
-    const reviewCount = Object.values(reviewFlags).filter(Boolean).length;
-    return { total, answeredCount, correctCount, reviewCount };
-  }, [userAnswers, reviewFlags]);
+  const handleNext = async () => {
+    if (currentIndex + 1 < currentList.length) {
+      const nextIndex = currentIndex + 1;
+      setCurrentIndex(nextIndex);
+      setIsAnswered(false);
+      setSelectedChoice(null);
+      // Save progress
+      await saveData({ progressIndex: nextIndex, progressMode: quizMode });
+    } else {
+      // Finished
+      await saveData({ progressIndex: 0, progressMode: null });
+      setProgressData({ index: 0, mode: null });
+      setStep('result');
+    }
+  };
 
-  // --- 画面レンダリング ---
+  const goHome = async () => {
+    // Save current index if returning mid-quiz
+    if (step === 'quiz') {
+       await saveData({ progressIndex: currentIndex, progressMode: quizMode });
+    }
+    setStep('menu');
+  };
 
-  if (currentScreen === 'menu') {
-    const pieData = [
-      { name: '正解', value: stats.correctCount, color: '#4ade80' },
-      { name: '不正解/未回答', value: stats.total - stats.correctCount, color: '#f87171' },
-    ];
-
+  // ----------------------------------------
+  // Render Helpers
+  // ----------------------------------------
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 p-4 font-sans">
-        <div className="max-w-xl mx-auto space-y-6">
-          <header className="text-center py-6">
-            <h1 className="text-2xl font-bold text-slate-700">簿記の基礎知識 2-2</h1>
-            <p className="text-slate-500 text-sm mt-1">過去問セレクト演習</p>
-          </header>
-
-          {/* ダッシュボード */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100 flex flex-col items-center">
-            <h2 className="text-lg font-semibold mb-4 w-full flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-yellow-500" /> 学習状況
-            </h2>
-            <div className="w-48 h-48">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={pieData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                  >
-                    {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <RechartsTooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="grid grid-cols-2 gap-8 text-center mt-2 w-full">
-              <div>
-                <p className="text-2xl font-bold text-green-500">{stats.correctCount}<span className="text-sm text-gray-400">/{stats.total}</span></p>
-                <p className="text-xs text-gray-500">正解数</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-orange-500">{stats.reviewCount}</p>
-                <p className="text-xs text-gray-500">要復習</p>
-              </div>
-            </div>
-          </div>
-
-          {/* モード選択 */}
-          <div className="grid gap-3">
-            <button 
-              onClick={() => startQuiz('all')}
-              className="flex items-center justify-between p-4 bg-blue-600 text-white rounded-xl shadow-md hover:bg-blue-700 transition active:scale-95"
-            >
-              <div className="flex items-center gap-3">
-                <Play className="w-5 h-5" />
-                <div className="text-left">
-                  <div className="font-bold">全ての問題を解く</div>
-                  <div className="text-xs opacity-90">全{problemData.length}問</div>
-                </div>
-              </div>
-              <ArrowRight className="w-5 h-5" />
-            </button>
-
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={() => startQuiz('wrong')}
-                className="flex flex-col items-center justify-center p-4 bg-white border-2 border-red-100 text-red-600 rounded-xl hover:bg-red-50 transition active:scale-95"
-              >
-                <RotateCcw className="w-6 h-6 mb-2" />
-                <span className="font-bold text-sm">前回 × のみ</span>
-              </button>
-              <button 
-                onClick={() => startQuiz('review')}
-                className="flex flex-col items-center justify-center p-4 bg-white border-2 border-orange-100 text-orange-600 rounded-xl hover:bg-orange-50 transition active:scale-95"
-              >
-                <CheckSquare className="w-6 h-6 mb-2" />
-                <span className="font-bold text-sm">要復習のみ</span>
-              </button>
-            </div>
-          </div>
-
-          {/* 問題一覧リスト */}
-          <div className="bg-white rounded-xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-4 bg-slate-50 border-b flex items-center gap-2">
-              <List className="w-4 h-4 text-slate-500" />
-              <h3 className="font-semibold text-slate-700 text-sm">問題一覧</h3>
-            </div>
-            <div className="max-h-64 overflow-y-auto divide-y">
-              {problemData.map((p, idx) => {
-                const hist = userAnswers[p.id];
-                const isReview = reviewFlags[p.id];
-                return (
-                  <div key={p.id} className="p-3 flex items-center justify-between hover:bg-slate-50 text-sm">
-                    <div className="flex items-center gap-3">
-                      <span className="w-6 h-6 flex items-center justify-center bg-gray-100 rounded text-xs text-gray-500 font-mono">
-                        {p.id}
-                      </span>
-                      <span className="truncate max-w-[200px] text-slate-600">
-                        {p.category}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {isReview && <AlertCircle className="w-4 h-4 text-orange-400" />}
-                      {hist ? (
-                        hist.isCorrect ? 
-                          <CheckCircle className="w-4 h-4 text-green-500" /> : 
-                          <XCircle className="w-4 h-4 text-red-500" />
-                      ) : (
-                        <span className="text-gray-300">-</span>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex flex-col items-center">
+          <RefreshCw className="w-10 h-10 animate-spin text-blue-500 mb-4" />
+          <p className="text-gray-600 font-medium">Loading...</p>
         </div>
       </div>
     );
   }
 
-  if (currentScreen === 'quiz') {
-    const problem = filteredProblems[currentProblemIndex];
-    const isLast = currentProblemIndex === filteredProblems.length - 1;
-    const progress = ((currentProblemIndex + 1) / filteredProblems.length) * 100;
-
-    return (
-      <div className="min-h-screen bg-slate-50 text-slate-800 pb-20 font-sans">
-        {/* ヘッダー */}
-        <div className="sticky top-0 bg-white shadow-sm z-10">
-          <div className="h-1 bg-gray-200 w-full">
-            <div className="h-full bg-blue-500 transition-all duration-300" style={{ width: `${progress}%` }}></div>
-          </div>
-          <div className="flex items-center justify-between p-4 max-w-2xl mx-auto">
-            <button onClick={() => setCurrentScreen('menu')} className="text-sm text-gray-500 hover:text-gray-800">中断する</button>
-            <span className="font-bold text-slate-700">Q. {currentProblemIndex + 1} / {filteredProblems.length}</span>
-            <span className="text-xs text-blue-600 font-medium px-2 py-1 bg-blue-50 rounded-full">{problem.category}</span>
-          </div>
-        </div>
-
-        <div className="max-w-2xl mx-auto p-4 space-y-6">
-          {/* 問題文 */}
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-100">
-            <p className="text-lg font-medium leading-relaxed whitespace-pre-wrap">{problem.question}</p>
-          </div>
-
-          {/* 選択肢 */}
-          <div className="grid gap-3">
-            {problem.options.map((opt, idx) => {
-              let btnClass = "p-4 text-left rounded-xl border-2 transition-all ";
-              if (showExplanation) {
-                if (idx === problem.correctAnswer) {
-                  btnClass += "bg-green-50 border-green-500 text-green-800";
-                } else if (idx === selectedOption) {
-                  btnClass += "bg-red-50 border-red-500 text-red-800";
-                } else {
-                  btnClass += "bg-white border-transparent shadow-sm opacity-50";
-                }
-              } else {
-                btnClass += "bg-white border-transparent shadow-sm hover:border-blue-200 active:scale-[0.99]";
-              }
-
-              return (
-                <button 
-                  key={idx}
-                  disabled={showExplanation}
-                  onClick={() => handleAnswer(idx)}
-                  className={btnClass}
-                >
-                  <div className="flex gap-3">
-                    <span className="font-bold font-mono text-gray-400">{['ア','イ','ウ','エ'][idx]}</span>
-                    <span>{opt}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {/* 解説エリア */}
-          {showExplanation && (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
-              <div className={`p-4 rounded-xl mb-4 text-center font-bold text-white shadow-md ${selectedOption === problem.correctAnswer ? 'bg-green-500' : 'bg-red-500'}`}>
-                {selectedOption === problem.correctAnswer ? '正解！' : '不正解...'}
-              </div>
-
-              <div className="bg-blue-50 p-6 rounded-xl border border-blue-100 shadow-sm text-slate-800">
-                <div className="flex items-center gap-2 mb-3 text-blue-800 font-bold border-b border-blue-200 pb-2">
-                  <BookOpen className="w-5 h-5" /> 解説
-                </div>
-                <div 
-                  className="text-sm leading-relaxed explanation-content"
-                  dangerouslySetInnerHTML={{ __html: problem.explanation }} 
-                />
-              </div>
-
-              {/* 復習チェック */}
-              <label className="flex items-center gap-3 p-4 bg-white mt-4 rounded-xl shadow-sm border border-orange-100 cursor-pointer hover:bg-orange-50 transition">
-                <input 
-                  type="checkbox" 
-                  checked={!!reviewFlags[problem.id]} 
-                  onChange={() => toggleReview(problem.id)}
-                  className="w-5 h-5 text-orange-500 rounded focus:ring-orange-500"
-                />
-                <span className="font-bold text-slate-700">あとで復習する（チェック）</span>
-              </label>
-
-              {/* 次へボタン */}
-              <button 
-                onClick={nextProblem}
-                className="w-full mt-6 py-4 bg-slate-800 text-white font-bold rounded-xl shadow-lg hover:bg-slate-900 transition active:scale-95 flex items-center justify-center gap-2"
-              >
-                {isLast ? '結果を見る' : '次の問題へ'} <ArrowRight className="w-5 h-5" />
+  return (
+    <div className="min-h-screen bg-gray-100 text-gray-800 font-sans p-4 md:p-8">
+      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-md overflow-hidden">
+        
+        {/* === HEADER === */}
+        {step !== 'login' && (
+          <div className="bg-blue-600 text-white p-4 flex items-center justify-between">
+            <h1 className="text-lg font-bold flex items-center gap-2">
+              <BookOpen size={20} />
+              過去問セレクト演習 簿記
+            </h1>
+            {step !== 'menu' && step !== 'resume_prompt' && (
+              <button onClick={goHome} className="p-2 hover:bg-blue-700 rounded-full transition">
+                <Home size={20} />
               </button>
+            )}
+          </div>
+        )}
+
+        <div className="p-4 md:p-6">
+          {/* === LOGIN STEP === */}
+          {step === 'login' && (
+            <div className="space-y-6 text-center py-8">
+              <BookOpen className="w-16 h-16 mx-auto text-blue-600" />
+              <h2 className="text-2xl font-bold">学習アプリへようこそ</h2>
+              <p className="text-gray-600 text-sm">合言葉（ユーザーID）を入力して履歴を同期しましょう。</p>
+              
+              <form onSubmit={handleLogin} className="max-w-sm mx-auto space-y-4">
+                <input
+                  type="text"
+                  placeholder="合言葉を入力"
+                  value={userId}
+                  onChange={(e) => setUserId(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {errorMsg && <p className="text-red-500 text-sm">{errorMsg}</p>}
+                <button 
+                  type="submit"
+                  className="w-full bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 transition"
+                >
+                  学習を始める
+                </button>
+              </form>
             </div>
           )}
-        </div>
-      </div>
-    );
-  }
 
-  if (currentScreen === 'result') {
-    const sessionCorrect = filteredProblems.filter(p => {
-       const h = userAnswers[p.id];
-       return h && h.isCorrect;
-    }).length;
-    
-    return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-        <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full text-center space-y-6">
-          <div className="w-20 h-20 bg-yellow-100 rounded-full flex items-center justify-center mx-auto">
-            <Trophy className="w-10 h-10 text-yellow-500" />
-          </div>
-          
-          <div>
-            <h2 className="text-2xl font-bold text-slate-800">お疲れ様でした！</h2>
-            <p className="text-slate-500 mt-2">今回の正解率</p>
-            <div className="text-5xl font-black text-blue-600 mt-2">
-              {Math.round((sessionCorrect / filteredProblems.length) * 100)}%
+          {/* === RESUME PROMPT STEP === */}
+          {step === 'resume_prompt' && (
+            <div className="space-y-6 py-6 text-center">
+              <div className="bg-blue-50 p-4 rounded-lg inline-block text-blue-800 mb-4">
+                <Clock className="w-12 h-12 mx-auto mb-2" />
+                <h3 className="font-bold text-lg">前回の続きから再開しますか？</h3>
+                <p className="text-sm mt-2">
+                  前回は <strong>{progressData.mode === 'all' ? 'すべての問題' : progressData.mode === 'wrong' ? '前回不正解のみ' : '要復習のみ'}</strong> の<br/>
+                  【第{progressData.index + 1}問目】で中断しています。
+                </p>
+              </div>
+              <div className="flex flex-col space-y-3 max-w-sm mx-auto">
+                <button 
+                  onClick={resumeQuiz}
+                  className="bg-blue-600 text-white font-bold py-3 rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                >
+                  続きから再開する <ArrowRight size={18} />
+                </button>
+                <button 
+                  onClick={() => setStep('menu')}
+                  className="bg-gray-200 text-gray-700 font-bold py-3 rounded-lg hover:bg-gray-300"
+                >
+                  メニューへ移動（履歴をリセットして開始）
+                </button>
+              </div>
             </div>
-            <p className="text-sm text-gray-400 mt-1">
-              {sessionCorrect} / {filteredProblems.length} 問正解
-            </p>
-          </div>
+          )}
 
-          <button 
-            onClick={() => setCurrentScreen('menu')}
-            className="w-full py-3 bg-blue-600 text-white font-bold rounded-xl shadow hover:bg-blue-700 transition"
-          >
-            メニューに戻る
-          </button>
+          {/* === MENU STEP === */}
+          {step === 'menu' && (
+            <div className="space-y-8">
+              <div className="text-center space-y-2">
+                <h2 className="text-xl font-bold border-b-2 border-blue-600 inline-block pb-1">出題モード選択</h2>
+                <p className="text-gray-500 text-sm">ユーザーID: {userId}</p>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-1">
+                <button 
+                  onClick={() => resetProgressAndStart('all')}
+                  className="flex items-center p-4 border-2 border-blue-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 transition text-left group"
+                >
+                  <div className="bg-blue-100 p-3 rounded-full text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition">
+                    <List size={24} />
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <div className="font-bold text-lg">すべての問題</div>
+                    <div className="text-sm text-gray-500">全{questions.length}問から出題します</div>
+                  </div>
+                  <ChevronRight className="text-gray-400 group-hover:text-blue-500" />
+                </button>
+
+                <button 
+                  onClick={() => resetProgressAndStart('wrong')}
+                  className="flex items-center p-4 border-2 border-red-200 rounded-xl hover:border-red-500 hover:bg-red-50 transition text-left group"
+                >
+                  <div className="bg-red-100 p-3 rounded-full text-red-600 group-hover:bg-red-600 group-hover:text-white transition">
+                    <X size={24} />
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <div className="font-bold text-lg">前回不正解・未回答のみ</div>
+                    <div className="text-sm text-gray-500">苦手な問題に集中して挑戦します</div>
+                  </div>
+                  <ChevronRight className="text-gray-400 group-hover:text-red-500" />
+                </button>
+
+                <button 
+                  onClick={() => resetProgressAndStart('review')}
+                  className="flex items-center p-4 border-2 border-yellow-200 rounded-xl hover:border-yellow-500 hover:bg-yellow-50 transition text-left group"
+                >
+                  <div className="bg-yellow-100 p-3 rounded-full text-yellow-600 group-hover:bg-yellow-500 group-hover:text-white transition">
+                    <BookOpen size={24} />
+                  </div>
+                  <div className="ml-4 flex-1">
+                    <div className="font-bold text-lg">要復習の問題のみ</div>
+                    <div className="text-sm text-gray-500">チェックをつけた問題を復習します</div>
+                  </div>
+                  <ChevronRight className="text-gray-400 group-hover:text-yellow-500" />
+                </button>
+              </div>
+
+              <div className="pt-4 border-t border-gray-200">
+                <button 
+                  onClick={() => setStep('history')}
+                  className="w-full bg-gray-800 text-white font-bold py-3 rounded-lg hover:bg-gray-900 transition flex items-center justify-center gap-2"
+                >
+                  学習履歴を確認する
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* === QUIZ STEP === */}
+          {step === 'quiz' && (
+            <div className="space-y-6">
+              <div className="flex justify-between items-center text-sm font-bold text-gray-500">
+                <span>問題 {currentIndex + 1} / {currentList.length}</span>
+                <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">{currentList[currentIndex]?.year}</span>
+              </div>
+
+              <div className="text-lg font-bold border-l-4 border-blue-600 pl-3">
+                {currentList[currentIndex]?.title}
+              </div>
+
+              <div className="text-gray-800 whitespace-pre-wrap leading-relaxed">
+                {currentList[currentIndex]?.question}
+              </div>
+
+              <div className="space-y-3 mt-6">
+                {currentList[currentIndex]?.choices.map((choice, idx) => {
+                  let btnClass = "w-full text-left p-4 rounded-lg border-2 transition-all flex items-start gap-3 ";
+                  let icon = null;
+
+                  if (!isAnswered) {
+                    btnClass += "border-gray-200 hover:border-blue-400 hover:bg-blue-50 bg-white";
+                  } else {
+                    if (idx === currentList[currentIndex].answerIndex) {
+                      btnClass += "border-green-500 bg-green-50 font-bold";
+                      icon = <Check className="text-green-500 flex-shrink-0 mt-0.5" size={20} />;
+                    } else if (idx === selectedChoice) {
+                      btnClass += "border-red-500 bg-red-50 text-red-900";
+                      icon = <X className="text-red-500 flex-shrink-0 mt-0.5" size={20} />;
+                    } else {
+                      btnClass += "border-gray-200 bg-gray-50 opacity-50";
+                    }
+                  }
+
+                  return (
+                    <button 
+                      key={idx} 
+                      onClick={() => handleChoiceClick(idx)}
+                      disabled={isAnswered}
+                      className={btnClass}
+                    >
+                      {icon || <div className="w-5 h-5 flex-shrink-0 mt-0.5 border border-gray-400 rounded-full"></div>}
+                      <span>{choice}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Explanation Section */}
+              {isAnswered && (
+                <div className="mt-8 animate-fade-in-up">
+                  <div className={`p-4 rounded-t-lg font-bold text-white flex items-center justify-between ${selectedChoice === currentList[currentIndex].answerIndex ? 'bg-green-600' : 'bg-red-600'}`}>
+                    <div className="flex items-center gap-2">
+                      {selectedChoice === currentList[currentIndex].answerIndex ? <Check size={24} /> : <X size={24} />}
+                      <span>{selectedChoice === currentList[currentIndex].answerIndex ? '正解！' : '不正解...'}</span>
+                    </div>
+                    
+                    <label className="flex items-center gap-2 cursor-pointer bg-black/20 px-3 py-1.5 rounded hover:bg-black/30 transition text-sm">
+                      <input 
+                        type="checkbox" 
+                        className="w-4 h-4 accent-white"
+                        checked={!!reviewData[currentList[currentIndex].id]}
+                        onChange={() => toggleReview(currentList[currentIndex].id)}
+                      />
+                      要復習
+                    </label>
+                  </div>
+                  
+                  <div className="bg-white border-x border-b border-gray-300 rounded-b-lg p-5">
+                    <h4 className="font-bold text-lg mb-4 border-b pb-2">解説</h4>
+                    {currentList[currentIndex]?.explanation}
+                  </div>
+
+                  <div className="mt-6 flex justify-end">
+                    <button 
+                      onClick={handleNext}
+                      className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                    >
+                      {currentIndex + 1 < currentList.length ? '次の問題へ' : '結果を見る'} <ChevronRight size={20} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* === RESULT STEP === */}
+          {step === 'result' && (
+            <div className="text-center space-y-6 py-8">
+              <h2 className="text-3xl font-bold text-blue-800">演習完了！</h2>
+              
+              <div className="bg-gray-100 rounded-xl p-8 max-w-sm mx-auto">
+                <p className="text-gray-500 mb-2">正答数</p>
+                <div className="text-5xl font-extrabold text-gray-800">
+                  <span className="text-blue-600">{sessionCorrectCount}</span> <span className="text-2xl text-gray-500">/ {currentList.length}</span>
+                </div>
+                <p className="mt-4 font-bold text-lg text-gray-700">
+                  正答率: {Math.round((sessionCorrectCount / currentList.length) * 100)}%
+                </p>
+              </div>
+
+              <div className="flex justify-center gap-4 pt-4">
+                <button 
+                  onClick={() => setStep('menu')}
+                  className="bg-blue-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-blue-700 transition"
+                >
+                  メニューへ戻る
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* === HISTORY STEP === */}
+          {step === 'history' && (
+            <div className="space-y-6">
+              <div className="flex items-center gap-2 mb-6 border-b pb-2">
+                <button onClick={() => setStep('menu')} className="text-gray-500 hover:text-gray-800"><ChevronLeft /></button>
+                <h2 className="text-xl font-bold">学習履歴</h2>
+              </div>
+
+              <div className="bg-white border rounded-lg overflow-hidden">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-100 text-gray-600 font-bold border-b">
+                    <tr>
+                      <th className="p-3 w-12 text-center">No</th>
+                      <th className="p-3">テーマ</th>
+                      <th className="p-3 w-24 text-center">前回結果</th>
+                      <th className="p-3 w-20 text-center">要復習</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {questions.map((q, idx) => (
+                      <tr key={q.id} className="border-b last:border-0 hover:bg-gray-50">
+                        <td className="p-3 text-center text-gray-500">{idx + 1}</td>
+                        <td className="p-3 font-medium">{q.title}</td>
+                        <td className="p-3 text-center">
+                          {historyData[q.id] === 'correct' ? (
+                            <span className="text-green-600 font-bold flex justify-center"><Check size={18} /></span>
+                          ) : historyData[q.id] === 'wrong' ? (
+                            <span className="text-red-500 font-bold flex justify-center"><X size={18} /></span>
+                          ) : (
+                            <span className="text-gray-400">-</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          <input 
+                            type="checkbox"
+                            className="w-5 h-5 accent-yellow-500 cursor-pointer"
+                            checked={!!reviewData[q.id]}
+                            onChange={() => toggleReview(q.id)}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
-    );
-  }
-
-  return null;
+    </div>
+  );
 }
